@@ -1,0 +1,16 @@
+html[style] {
+    min-height: 100% !important;
+    height: 100% !important;
+ }
+body[style] {
+    min-height: 100% !important;
+    height: 100% !important;
+ }
+
+.wrapper{
+    height: 100% !important;
+}
+
+ .content-wrapper{
+     min-height: 84% !important;
+ }
