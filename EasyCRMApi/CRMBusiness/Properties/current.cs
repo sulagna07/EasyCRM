@@ -1,25 +1,22 @@
 Angular:
 
-export class CounterComponent {
-  public currentCount = 0;
-  public employees: Person;
-  
+export class FetchDataComponent{
+
+  public forecasts: WeatherForecast[];
+  isAuthenticated: boolean;
+
   constructor(http: HttpClient, @Inject('BASE_URL') baseUrl: string) {
-    let headers = new HttpHeaders({ 'Content-Type': 'application/json' }); 
+    //let headers = new HttpHeaders({ 'Content-Type': 'application/json' });, { headers: headers }
     const requestbody: LohaRequest = {
-      BusinessData: 1,//"{'Name':'Ajit','Age':'5','Address':'Kolkata'}",
-      Operation: "key_getperson"
+      businessData: '',
+      operation: "key_getforecast"
     };
-    console.log(requestbody);
-    http.post<LohaResponse>(baseUrl + 'api/SampleData/CommonExecutor', requestbody, { headers: headers }).subscribe(result => {
+    http.post<LohaResponse>(baseUrl + 'api/LohaApi/CommonExecutor', requestbody).subscribe(result => {
       console.log(result);
-      this.employees = result.Data;
+      this.forecasts = result.data;
     }, error => console.error(error));
   }
-
-  public incrementCounter() {
-    this.currentCount++;
-  }
+  
 }
 
 interface LohaResponse {
@@ -40,35 +37,46 @@ interface LohaRequest {
 }
 
 =====================================================
-[HttpPost("[action]")]
-public async Task<string> CommonExecutor([FromBody]LohaRequest request)
+[Route("api/[controller]")]
+[ApiController]
+[Authorize]
+public class LohaApiController : ControllerBase
 {
-	try
+	private IApiClient _client;
+	public LohaApiController(IApiClient client)
 	{
-		var msg = await _client.PostAsync("commonapi/commonexecuter", request);
-		return msg;
+		_client = client;
 	}
-	catch (Exception ex)
+	[HttpPost("[action]")]
+	public async Task<object> CommonExecutor([FromBody]LohaRequest request)
 	{
-		LohaResponse<string> resp = new LohaResponse<string>();
-		resp.Success = false;
-		resp.Message = ex.Message;
-		resp.Data = string.Empty;
-		return JsonConvert.SerializeObject(resp);
-	}
+		try
+		{
+			var msg = await _client.PostAsync("commonapi/commonexecuter", request);
+			return JsonConvert.DeserializeObject(msg);
+		}
+		catch (Exception ex)
+		{
+			LohaResponse<string> resp = new LohaResponse<string>();
+			resp.Success = false;
+			resp.Message = ex.Message;
+			resp.Data = string.Empty;
+			return JsonConvert.SerializeObject(resp, new JsonSerializerSettings { ContractResolver = new CamelCasePropertyNamesContractResolver() });
+		}
 
+	}
 }
 
 /// <summary>  
 /// Common method for making POST calls  
 /// </summary>  
 public async Task<string> PostAsync<T>(string requestUrl, T content)
-{
-	addHeaders();
-	var response = await _httpClient.PostAsJsonAsync(requestUrl, content);
-	response.EnsureSuccessStatusCode();
-	return await response.Content.ReadAsStringAsync();
-}
+        {
+            addHeaders();
+            var response = await _httpClient.PostAsJsonAsync(requestUrl, content);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
+        }
 ===================================================
 using LohaWorker;
 using Microsoft.AspNetCore.Mvc;
@@ -87,10 +95,10 @@ namespace LohaApi.Controllers
         }
 
         [HttpPost("[action]")]
-        public string CommonExecuter(LohaRequest lohaRequest)
+        public object CommonExecuter(LohaRequest lohaRequest)
         {
            var rtobj=_workmonitor.SelectWorker(lohaRequest);
-           return rtobj == null ? string.Empty : (string)rtobj;
+           return rtobj;
         }
 
         [HttpPost("[action]")]
@@ -107,7 +115,6 @@ namespace LohaApi.Controllers
     }
 }
 ==================================================================
-
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
@@ -133,14 +140,12 @@ namespace LohaWorker
             _memoryCache = memoryCache;
             _config = config;
         }
-        public string SelectWorker(LohaRequest request)
+        public object SelectWorker(LohaRequest request)
         {
-            object ob = null;
             string _procName, _workerName, _actionName;
             CheckCache(request.Operation, _config.GetSection("ExternalPath:XmlSettings").Value, out _procName,out _workerName,out _actionName);
             var d = Delegate.CreateDelegate(typeof(ExecuteOperation<string>), GetInstance(_workerName), _actionName);
-            ob = d.DynamicInvoke(request.BusinessData, _procName);
-            return ob.ToString();
+            return d.DynamicInvoke(request.BusinessData, _procName);
         }
         public string SelectWorker(string Operation, string BusinessData, IEnumerator<IFormFile> files)
         {
@@ -203,12 +208,8 @@ namespace LohaWorker
     }
 }
 
-=========================================================================
-using LohaBusiness;
-using Microsoft.AspNetCore.Http;
-using Newtonsoft.Json;
-using System.Collections.Generic;
 
+=========================================================================
 namespace LohaWorker
 {
     public class HomeWorker
@@ -220,12 +221,12 @@ namespace LohaWorker
         }
         public string GetEmpName(string data, string procname)
         {
-            return JsonConvert.SerializeObject(_homeBusiness.GetName(data,procname));
+            return JsonConvert.SerializeObject(_homeBusiness.GetName(data,procname), new JsonSerializerSettings { ContractResolver = new CamelCasePropertyNamesContractResolver() });
         }
 
         public string GetForeCast(string data, string procname)
         {
-            return JsonConvert.SerializeObject(_homeBusiness.GetForecast(data,procname));
+            return JsonConvert.SerializeObject(_homeBusiness.GetForecast(data,procname), new JsonSerializerSettings { ContractResolver = new CamelCasePropertyNamesContractResolver() });
         }
 
         public string GetForeCastForm(string data, string procname, IEnumerator<IFormFile> files)
@@ -235,12 +236,6 @@ namespace LohaWorker
     }
 }
 =============================================================================
-using LohaDal;
-using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using ValueObjects;
-
 namespace LohaBusiness
 {
     public class HomeBusiness: IHomeBusiness
@@ -282,8 +277,15 @@ namespace LohaBusiness
             }
             return lresp;
         }
+
+       /* public LohaResponse<Person> SaveFormData(string businessData, string procName, string, IEnumerator<IFormFile> files, File filesx)
+        {
+            LohaResponse<Person> lresp = new LohaResponse<Person>();
+
+        }*/
     }
 }
+
 ======================================================================================
 public class LohaResponse<T>
     {
@@ -298,3 +300,119 @@ public class LohaRequest
 	public string BusinessData { get; set; }
 }
 
+========================================================================================
+public void ConfigureServices(IServiceCollection services)
+        {
+            var authority = Configuration["OktaConfig:Issuer"];
+
+            var configurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(
+            authority + Configuration["OktaConfig:OpenidEndpoint"],
+            new OpenIdConnectConfigurationRetriever(),
+            new HttpDocumentRetriever());
+            
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = authority,
+                    ValidAudience = "api://default",
+                    //IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Configuration["Jwt:Key"]))
+                    IssuerSigningKeyResolver = (token, securityToken, identifier, parameters) =>
+                    {
+                        var discoveryDocument = Task.Run(() => configurationManager.GetConfigurationAsync()).GetAwaiter().GetResult();
+                        return discoveryDocument.SigningKeys;
+                    }
+                };
+            });
+        }
+===============================================================================
+"OktaConfig": {
+    "Issuer": "https://dev-345075.okta.com/oauth2/default",
+    "OpenidEndpoint": "/.well-known/openid-configuration"
+  } 
+===============================================================================
+app.UseHttpsRedirection();
+            app.UseStaticFiles();
+            app.UseSpaStaticFiles();
+            app.UseAuthentication();
+================================================================
+import { Injectable } from '@angular/core';
+import {HttpEvent,HttpHandler,HttpInterceptor,HttpRequest} from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { from } from 'rxjs';
+import { OktaAuthService } from '@okta/okta-angular';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class AuthInterceptor implements HttpInterceptor {
+  constructor(private oktaAuth: OktaAuthService) { }
+
+  intercept(
+    request: HttpRequest<any>,
+    next: HttpHandler
+  ): Observable<HttpEvent<any>> {
+    return from(this.handleAccess(request, next));//Observable.fromPromise(this.handleAccess(request, next));
+  }
+
+  private async handleAccess(
+    request: HttpRequest<any>,
+    next: HttpHandler
+  ): Promise<HttpEvent<any>> {
+    const accessToken = await this.oktaAuth.getAccessToken();
+    request = request.clone({
+      setHeaders: {
+        Authorization: 'Bearer ' + accessToken
+      }
+    });
+    return next.handle(request).toPromise();
+  }
+}
+================================================================================
+import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
+import { AuthInterceptor } from './shared/auth.interceptor';
+========================================================================
+providers: [
+    { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true }
+  ],
+==========================================================================
+export class HomeComponent implements OnInit {
+  isAuthenticated: boolean;
+
+  constructor(private oktaAuth: OktaAuthService) {
+    console.log("Constructor-1");
+  }
+
+  async ngOnInit(){
+    console.log("Ngonit-2");
+    this.isAuthenticated = await this.oktaAuth.isAuthenticated();
+    // Subscribe to authentication state changes
+    this.oktaAuth.$authenticationState.subscribe(
+      (isAuthenticated: boolean) => (this.isAuthenticated = isAuthenticated)
+    );
+  }
+}
+======================================================================
+<div>
+  <div>
+    <button *ngIf="!isAuthenticated"
+            (click)="oktaAuth.loginRedirect()">
+      Login
+    </button>
+    <button *ngIf="isAuthenticated"
+            [routerLink]="['/fetch-data']">
+      Sugar Level List
+    </button>
+    <button *ngIf="isAuthenticated"
+            (click)="oktaAuth.logout()">
+      Login
+    </button>
+  </div>
+</div>
+=================================
+https://developer.okta.com/blog/2018/07/27/build-crud-app-in-aspnet-framework-webapi-and-angular  
