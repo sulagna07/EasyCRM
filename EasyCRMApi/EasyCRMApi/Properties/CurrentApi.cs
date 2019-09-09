@@ -18,11 +18,12 @@ export class AuthInterceptor implements HttpInterceptor {
   private async handleLohaAccess(request: HttpRequest<any>, next: HttpHandler): Promise<HttpEvent<any>> {
     const accessToken = await this.oktaAuth.getAccessToken();
     const currentUser = this.userService.currentUserValue;
+    console.log(currentUser);
     var authString: string='';
-    if (currentUser && currentUser.Token) {
-      authString = `Bearer ${currentUser.Token}`;
+    if (currentUser && currentUser.token) {
+      authString = `Bearer ${currentUser.token}`;
     } else if (accessToken) {
-      authString = 'Bearer ' + accessToken;
+      authString = `Bearer ${accessToken}`; //'Bearer ' + accessToken;
     }
     console.log("Auth head", authString)
     request = request.clone({
@@ -122,11 +123,11 @@ export class UserService {
     return this.http.post<CRMResponse>(this.baseUrl + 'api/login/login',
       accountLoginModel, httpOptions).pipe(map(resp => {
         // login successful if there's a jwt token in the response
-        if (resp.Success) {
-          localStorage.setItem('currentUser', JSON.stringify(resp.Data));
-          this.currentUserSubject.next(resp.Data);
+        console.log("resp",resp);
+        if (resp.success) {
+          localStorage.setItem('currentUser', JSON.stringify(resp.data));
+          this.currentUserSubject.next(resp.data);
         }
-        console.log(resp);
         return resp;
       }));
   }
@@ -136,6 +137,7 @@ export class UserService {
   }
 
 }
+
 =========================================================================
 var authority = Configuration["OktaConfig:Issuer"];
 
@@ -194,10 +196,14 @@ using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
+using ValueObjects;
 
 namespace LohaWeb.Controllers
 {
@@ -212,18 +218,26 @@ namespace LohaWeb.Controllers
             _config = config;
         }
         [HttpPost("login")]
-        public IActionResult Login([FromBody]UserModel login)
+        public async Task<string> Login([FromBody]UserModel login)
         {
-            IActionResult response = Unauthorized();
+            LohaResponse<AccountUser> resp = new LohaResponse<AccountUser>();
             var user = AuthenticateUser(login);
-
             if (user != null)
             {
-                var tokenString = GenerateJSONWebToken(user);
-                response = Ok(new { token = tokenString });
+                AccountUser auser = new AccountUser();
+                auser.FullName = "Jhon Doe";
+                auser.Email = "Test@test.com";
+                auser.Token= GenerateJSONWebToken(user);
+                resp.Data = auser;
+                resp.Success = true;
             }
-
-            return response;
+            else
+            {
+                resp.Message = "error";
+                resp.Success = false;
+            }
+            return JsonConvert.SerializeObject(resp, new JsonSerializerSettings { ContractResolver = new CamelCasePropertyNamesContractResolver() });
+            //return resp;
         }
 
         private string GenerateJSONWebToken(UserModel userInfo)
@@ -251,8 +265,6 @@ namespace LohaWeb.Controllers
         {
             UserModel user = null;
 
-            //Validate the User Credentials 
-            //Demo Purpose, I have Passed HardCoded User Information 
             if (login.Username == "Jignesh")
             {
                 user = new UserModel { Username = "Jignesh Trivedi", EmailAddress = "test.btest@gmail.com" };
@@ -269,6 +281,13 @@ namespace LohaWeb.Controllers
         public string Password { get; set; }
         public DateTime DateOfJoing { get; set; }
     }
+
+    public class AccountUser
+    {
+        public string FullName { get; set; }
+        public string Email { get; set; }
+        public string Token { get; set; }
+    }
 }
 ==============================================================================================================
 export class AccountLogin {
@@ -277,13 +296,14 @@ export class AccountLogin {
 }
 
 export class CRMResponse {
-  Success: boolean;
-  Message: string;
-  Data: any;
+  success: boolean;
+  message: string;
+  data: any;
 }
 
 export class AccountUser {
-  FullName: string;
-  Email: string;
-  Token: string;
+  fullName: string;
+  email: string;
+  token: string;
 }
+
