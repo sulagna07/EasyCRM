@@ -306,4 +306,6 @@ export class AccountUser {
   email: string;
   token: string;
 }
-
+=====================================================================
+https://stackoverflow.com/questions/49694383/use-multiple-jwt-bearer-authentication
+https://stackoverflow.com/questions/46520047/how-to-allow-multiple-jwt-with-different-issuers-in-asp-net-core-2-0
