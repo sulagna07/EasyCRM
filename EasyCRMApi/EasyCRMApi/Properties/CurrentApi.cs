@@ -309,3 +309,5 @@ export class AccountUser {
 =====================================================================
 https://stackoverflow.com/questions/49694383/use-multiple-jwt-bearer-authentication
 https://stackoverflow.com/questions/46520047/how-to-allow-multiple-jwt-with-different-issuers-in-asp-net-core-2-0
+https://jasonwatmore.com/post/2019/01/08/aspnet-core-22-role-based-authorization-tutorial-with-example-api
+https://docs.microsoft.com/en-us/aspnet/core/security/authorization/roles?view=aspnetcore-2.2
