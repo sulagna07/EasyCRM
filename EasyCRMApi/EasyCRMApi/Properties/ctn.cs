@@ -80,8 +80,8 @@ namespace HBAuthTest.Controllers
         {
             var token = new OktaToken();
             var client = new HttpClient();
-            var client_id = "0oaneni0j4pKmU3hG0h7";//this.oktaSettings.Value.ClientId;
-            var client_secret = "h7EkLQ8WbYJkI83l31o0sV0sBO73A1UItSXevlDR";//this.oktaSettings.Value.ClientSecret;
+            var client_id = "0oan";//this.oktaSettings.Value.ClientId;
+            var client_secret = "h7EkLQ81o0sV0s1UItSXevlDR";//this.oktaSettings.Value.ClientSecret;
             var clientCreds = System.Text.Encoding.UTF8.GetBytes($"{client_id}:{client_secret}");
             client.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Basic", System.Convert.ToBase64String(clientCreds));
@@ -146,14 +146,41 @@ namespace HBAuthTest.Controllers
 .AddCookie()
 .AddOktaMvc(new OktaMvcOptions
 {
-    OktaDomain = "https://dev-198806.oktapreview.com",
-    ClientId = "0oaneni0j4pKmU3hG0h7",
-    ClientSecret = "h7EkLQ8WbYJkI83l31o0sV0sBO73A1UItSXevlDR",
+    OktaDomain = "https://de6.oktaprew.com",
+    ClientId = "0oh7",
+    ClientSecret = "h70sBO73A1UIt",
     Scope = new List<string> { "openid", "profile", "email" }
 });
 
 app.UseAuthentication();
 =============================================================================
+[HttpPost("[action]")]
+        public IActionResult Index()
+        {
+            var msgChkOktaUser = new StringBuilder(1000);
+            var xmlDoc = new XmlDocument()
+            {
+                PreserveWhitespace = true
+            };
+            if (!string.IsNullOrEmpty(Request.Form["SAMLResponse"]))
+            {
+                var samlResponses = Request.Form["SAMLResponse"];
+                // the sample data sent us may be already encoded, 
+                // which results in double encoding
+                
+                var realayState = Request.Form["RelayState"];
+                if (!string.IsNullOrEmpty(samlResponses) && samlResponses.Count > 0)
+                {
+                    var samlXmlstr = Encoding.UTF8.GetString(Convert.FromBase64String(samlResponses));
+                    xmlDoc.LoadXml(samlXmlstr);
+                }
+
+            }
+
+            return Content("Test");
+        }
+  
+=============================================================
 upgraded users:
 https://developer.okta.com/pricing/
 https://www.okta.com/free-trial/
@@ -165,3 +192,7 @@ https://developer.okta.com/blog/2017/06/29/oidc-user-auth-aspnet-core
 https://developer.okta.com/okta-sdk-dotnet/latest/api/Okta.Sdk.User.html
 https://github.com/okta/samples-aspnetcore
 https://developer.okta.com/blog/2018/02/01/secure-aspnetcore-webapi-token-auth
+
+https://csharp.hotexamples.com/examples/-/AuthnRequest/-/php-authnrequest-class-examples.html
+https://www.codeproject.com/Articles/56640/Performing-a-SAML-Post-with-C
+https://github.com/i8beef/SAML2
