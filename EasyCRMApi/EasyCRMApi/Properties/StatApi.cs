@@ -128,3 +128,23 @@ https://www.code-sample.com/2017/10/access-session-in-web-api-2-mvc-5.html
 https://forums.asp.net/t/2128410.aspx?Web+API+session+managment
 https://www.wiliam.com.au/wiliam-blog/enabling-session-state-in-web-api
 https://www.codeproject.com/Tips/513522/Providing-session-state-in-ASP-NET-WebAPI
+
+===============================================================================================
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+<system.webServer>
+  <rewrite>
+    <rules>
+      <rule name="Angular Routes" stopProcessing="true">
+        <match url="^satafclient/" />
+        <conditions logicalGrouping="MatchAll">
+          <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
+          <add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
+        </conditions>
+        <action type="Rewrite" url="/satafclient/" />
+      </rule>
+    </rules>
+  </rewrite>
+</system.webServer>
+
+</configuration>
