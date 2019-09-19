@@ -196,3 +196,143 @@ https://developer.okta.com/blog/2018/02/01/secure-aspnetcore-webapi-token-auth
 https://csharp.hotexamples.com/examples/-/AuthnRequest/-/php-authnrequest-class-examples.html
 https://www.codeproject.com/Articles/56640/Performing-a-SAML-Post-with-C
 https://github.com/i8beef/SAML2
+
+========================================================
+  public HttpResponseMessage Login()
+        {
+            List<string> cacheDataKeys;
+            string cacheData;
+            string errorMsg;
+            CacheDataHelper.CheckFileCache("key_getperson", @"E:\Projects\2019\SatafApi\SatafApi\Config\CacheMapping.xml", out cacheDataKeys, out errorMsg);
+            if(string.IsNullOrEmpty(errorMsg) && cacheDataKeys !=null && cacheDataKeys.Count > 0)
+            {
+                CacheDataHelper.CheckDbCache(cacheDataKeys, out cacheData, out errorMsg);
+                if (string.IsNullOrEmpty(errorMsg))
+                {
+                    //var exObj = JsonConvert.DeserializeObject<ExpandoObject>("{\"a\":1}") as dynamic;
+
+                    //Console.WriteLine($"exObj.a = {exObj?.a}, type of {exObj?.a.GetType()}");
+                    var exObj = JsonConvert.DeserializeObject<ExpandoObject>(cacheData as dynamic);
+                    var x= exObj?.Gender;
+                    var test=JsonConvert.DeserializeObject<RootObject>(cacheData);
+                }
+            }
+        }
+============================================================================
+  using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Web;
+using System.Xml;
+using System.Xml.Linq;
+
+namespace SatafApi.Helper
+{
+    public static class CacheDataHelper
+    {
+        public static void CheckFileCache(string operation, string datasettingsfilepath, out List<string> cachevalue, out string errormsg)
+        {
+            Dictionary<string, List<string>> cacheData=null;
+            cachevalue = null;
+            errormsg = string.Empty;
+            try
+            {
+                cacheData = MemoryCacher.getValue<Dictionary<string, List<string>>>("CrmProcs");
+                if (cacheData == null)
+                {
+                    cacheData = XmlSettings(datasettingsfilepath);
+                    MemoryCacher.setValue("CrmProcs", cacheData);
+                }
+                if (cacheData != null)
+                {
+                    cacheData.TryGetValue(operation, out cachevalue);
+                }
+            }
+            catch(Exception ex)
+            {
+                errormsg = ex.Message;
+            }
+            
+        }
+
+        public static void CheckDbCache(List<string> keynames, out string cacheData, out string errormsg)
+        {
+            Dictionary<string, string> cacheDict = null;
+            errormsg = string.Empty;
+            cacheData = string.Empty;
+            try
+            {
+                cacheDict = MemoryCacher.getValue<Dictionary<string, string>>("HbDbCache");
+                if (cacheDict == null)
+                {
+                    cacheDict = getCacheDataFromDb();
+                    MemoryCacher.setValue("HbDbCache", cacheDict);
+                }
+                if (cacheDict != null)
+                {
+                    StringBuilder sb = new StringBuilder();
+                    sb.Append("{");
+                    bool first = true;
+                    foreach (var key in keynames)
+                    {
+                        if (!first)
+                        {
+                            sb.Append(",");
+                        }
+                        sb.AppendFormat("\"{0}\":{1}", key, cacheDict[key]);
+                        first = false;
+                    }
+                    sb.Append("}");
+                    cacheData = sb.ToString();
+                }
+            }
+            catch (Exception ex)
+            {
+                errormsg = ex.Message;
+            }
+
+        }
+
+        private static Dictionary<string, List<string>> XmlSettings(string _dataSettingsFilePath)
+        {
+            XDocument xdoc = XDocument.Load(_dataSettingsFilePath);
+            var elist = xdoc.Descendants("Cache").Select(e => new { Key = e.Attribute("Operation").Value, ValueCol = e.Attribute("ValueCollection").Value})
+                        .ToDictionary(t => t.Key, t => t.ValueCol.Split(',').ToList());
+            return elist;
+        }
+
+        private static Dictionary<string,string> getCacheDataFromDb()
+        {
+            Dictionary<string, string> cacheData = new Dictionary<string, string>();
+            List<TestModel> list = new List<TestModel>();
+            list.Add(new TestModel { Data = "Mr.",Value="1",DisplayOrder="1" });
+            list.Add(new TestModel { Data = "Mrs.", Value = "2", DisplayOrder = "2" });
+            cacheData.Add("FirstName", JsonConvert.SerializeObject(list, Newtonsoft.Json.Formatting.None));
+
+            List<TestModel> list1 = new List<TestModel>();
+            list1.Add(new TestModel { Data = "Male", Value = "1", DisplayOrder = "1" });
+            list1.Add(new TestModel { Data = "Female", Value = "2", DisplayOrder = "2" });
+            cacheData.Add("Gender", JsonConvert.SerializeObject(list1, Newtonsoft.Json.Formatting.None));
+            return cacheData;
+        }
+    }
+
+    public class TestModel
+    {
+        public string Value { get; set; }
+        public string Data { get; set; }
+        public string DisplayOrder { get; set; }
+    }
+
+    public class RootObject
+    {
+        public List<TestModel> FirstName { get; set; }
+        public List<TestModel> Gender { get; set; }
+    }
+}
+
+======================================================================
+  https://www.newtonsoft.com/json/help/html/QueryJsonDynamic.htm
+https://www.red-gate.com/simple-talk/dotnet/c-programming/working-with-the-dynamic-type-in-c/
