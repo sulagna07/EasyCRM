@@ -429,4 +429,8 @@ namespace JwtAuthTest
         }
     }
 }
-
+===============================================================================
+https://www.blinkingcaret.com/2018/05/30/refresh-tokens-in-asp-net-core-web-api/
+https://www.c-sharpcorner.com/article/handle-refresh-token-using-asp-net-core-2-0-and-json-web-token/
+https://angular-academy.com/angular-jwt/
+https://fullstackmark.com/post/19/jwt-authentication-flow-with-refresh-tokens-in-aspnet-core-web-api
