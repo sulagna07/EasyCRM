@@ -435,3 +435,129 @@ https://www.c-sharpcorner.com/article/handle-refresh-token-using-asp-net-core-2-
 https://angular-academy.com/angular-jwt/
 https://fullstackmark.com/post/19/jwt-authentication-flow-with-refresh-tokens-in-aspnet-core-web-api
 https://houseofcat.io/tutorials/aspnet/addjwtauthentication
+
+============================================
+  [HttpPost("[action]")]
+        [AllowAnonymous]
+        public async Task<ActionResult<dynamic>> UserLogin([FromBody]UserLoginModel userParam)
+        {
+            var user = await Authenticate(userParam.UserName, userParam.Password);
+
+            if (user == null)
+                return NotFound();//BadRequest(new { message = "Username or password is incorrect" });
+
+            return Ok(user);
+        }
+=====================================
+  public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddControllers();
+            services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = "bearer";
+                options.DefaultChallengeScheme = "bearer";
+            }).AddJwtBearer("bearer", options =>
+            {
+                // Configuration for your custom
+                // JWT tokens here
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = "abc.com",//Configuration["Jwt:Issuer"],
+                    ValidAudience = "abc.com",//Configuration["Jwt:Issuer"],
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Secret)),
+                    ClockSkew = TimeSpan.Zero //the default for this setting is 5 minutes
+                };
+                options.Events = new JwtBearerEvents
+                {
+                    OnAuthenticationFailed = context =>
+                    {
+                        if (context.Exception.GetType() == typeof(SecurityTokenExpiredException))
+                        {
+                            context.Response.Headers.Add("Token-Expired", "true");
+                        }
+                        return Task.CompletedTask;
+                    }
+                };
+            });
+            /*services
+                .AddAuthorization(options =>
+                {
+                    options.DefaultPolicy = new AuthorizationPolicyBuilder()
+                        .RequireAuthenticatedUser()
+                        .AddAuthenticationSchemes("CustomJwt")
+                        .Build();
+                });*/
+            
+        }
+
+        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        {
+            if (env.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+
+            app.UseHttpsRedirection();
+
+            app.UseRouting();
+            app.UseAuthentication();
+            app.UseAuthorization();
+
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapControllers();
+            });
+        }
+=========================================
+  services.AddAuthentication()
+            .AddJwtBearer("OktaJwt", options =>
+            {
+                options.Authority = authority;
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = authority,
+                    ValidAudience = "api://default",
+                    //IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Configuration["Jwt:Key"]))
+                    IssuerSigningKeyResolver = (token, securityToken, identifier, parameters) =>
+                    {
+                        var discoveryDocument = Task.Run(() => configurationManager.GetConfigurationAsync()).GetAwaiter().GetResult();
+                        return discoveryDocument.SigningKeys;
+                    }
+                };
+            })
+            .AddJwtBearer("CustomJwt", options =>
+            {
+                // Configuration for your custom
+                // JWT tokens here
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = Configuration["Jwt:Issuer"],
+                    ValidAudience = Configuration["Jwt:Issuer"],
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Configuration["Jwt:Key"]))
+                };
+            });
+======================
+  var authority = Configuration["OktaConfig:Issuer"];
+
+            var configurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(
+            authority + Configuration["OktaConfig:OpenidEndpoint"],
+            new OpenIdConnectConfigurationRetriever(),
+            new HttpDocumentRetriever());
+====================================
+  "OktaConfig": {
+    "Issuer": "https://dev-345075.okta.com/oauth2/default",
+    "OpenidEndpoint": "/.well-known/openid-configuration"
+  },
