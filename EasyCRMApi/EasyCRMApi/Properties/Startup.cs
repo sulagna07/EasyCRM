@@ -135,3 +135,8 @@ namespace TestCaveSepApi
         }
     }
 }
+/*
+https://docs.microsoft.com/en-us/aspnet/core/security/authorization/limitingidentitybyscheme?view=aspnetcore-3.0&tabs=aspnetcore2x
+https://medium.com/agilix/asp-net-core-supporting-multiple-authorization-6502eb79f934
+
+*/
