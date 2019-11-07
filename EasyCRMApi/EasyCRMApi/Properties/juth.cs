@@ -236,4 +236,12 @@ export class AuthenticationService {
 ==================================================================
 https://www.dotnetcurry.com/angularjs/1448/angular-http-client-interceptors-headers-event
 https://stackoverflow.com/questions/48184107/read-response-headers-from-api-response-angular-5-typescript
+https://stackoverflow.com/questions/14970102/anti-forgery-token-is-meant-for-user-but-the-current-user-is-username
+https://code-maze.com/action-filters-aspnetcore/
+https://docs.microsoft.com/en-us/aspnet/core/mvc/controllers/filters?view=aspnetcore-3.0
+https://forums.asp.net/t/1938599.aspx?How+to+extend+the+functionality+of+Anti+forgery+token+class
+https://nozzlegear.com/blog/send-and-validate-an-asp-net-antiforgerytoken-as-a-request-header
+http://www.prideparrot.com/blog/archive/2012/7/securing_all_forms_using_antiforgerytoken
+https://andrewlock.net/introduction-to-authentication-with-asp-net-core/
+https://github.com/aspnet/AspNetCore/issues/3616
 
