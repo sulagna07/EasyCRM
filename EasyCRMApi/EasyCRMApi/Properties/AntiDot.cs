@@ -469,5 +469,3 @@ https://github.com/aspnet/Mvc/blob/master/src/Microsoft.AspNetCore.Mvc.Core/Auth
 https://stackoverflow.com/questions/31464359/how-do-you-create-a-custom-authorizeattribute-in-asp-net-core
 https://docs.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.antiforgery.iantiforgeryadditionaldataprovider.validateadditionaldata?view=aspnetcore-3.0
 
-
-Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6IjEiLCJyb2xlIjoiQWRtaW4iLCJuYmYiOjE1NzMzMTk1MTcsImV4cCI6MTU3MzMxOTgxNywiaWF0IjoxNTczMzE5NTE3LCJpc3MiOiJhYmMuY29tIiwiYXVkIjoiYWJjLmNvbSJ9.Uu0LxzCI8xJZdW70xcxbuNInwjhRGrQOTag8Nwbam6I
