@@ -1,26 +1,5 @@
-using Microsoft.AspNetCore.Antiforgery;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Authorization.Policy;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Authorization;
-using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Primitives;
-using Microsoft.IdentityModel.Tokens;
-using System;
-using System.Collections.Generic;
-using System.IdentityModel.Tokens.Jwt;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace RtmWebApi.Helper
-{
-    public class AuthorizeFilter : IAsyncAuthorizationFilter, IFilterFactory
+public class AuthorizeFilter : IAsyncAuthorizationFilter, IFilterFactory, IAntiforgeryPolicy
     {
-        private MvcOptions _mvcOptions;
-        private AuthorizationPolicy _effectivePolicy;
         private readonly IAntiforgery _antiforgery;
 
         /// <summary>
@@ -30,7 +9,7 @@ namespace RtmWebApi.Helper
         {
             _antiforgery = antiforgery;
         }
-
+        
         /// <summary>
         /// The <see cref="IAuthorizationPolicyProvider"/> to use to resolve policy names.
         /// </summary>
@@ -54,19 +33,36 @@ namespace RtmWebApi.Helper
 
         public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
         {
+
             if (context == null)
             {
                 throw new ArgumentNullException(nameof(context));
             }
-            try
+
+            if (!context.IsEffectivePolicy<IAntiforgeryPolicy>(this))
             {
-                await _antiforgery.ValidateRequestAsync(context.HttpContext);
+                return;
             }
-            catch (AntiforgeryValidationException exception)
+
+            /*if (context.HttpContext.Request.HttpMethod != "POST")
+                return;
+
+            if (context.ActionDescriptor.GetCustomAttributes(typeof(NoAntiForgeryCheckAttribute), true).Length > 0)
+                return;*/
+
+            if (ShouldValidate(context))
             {
-                //_logger.AntiforgeryTokenInvalid(exception.Message, exception);
-                context.Result = new BadRequestResult();
+                try
+                {
+                    await _antiforgery.ValidateRequestAsync(context.HttpContext);
+                }
+                catch (AntiforgeryValidationException)//ex
+                {
+                    //_logger.AntiforgeryTokenInvalid(exception.Message, exception);
+                    context.Result = new BadRequestResult();
+                }
             }
+
             // Allow Anonymous skips all authorization
             if (HasAllowAnonymous(context.Filters))
             {
@@ -77,31 +73,47 @@ namespace RtmWebApi.Helper
             if (TokenExists(context, out string token))
             {
                 try
-                { validToken = await ValidateTokenAsync(token); } // This section can be greatly expanded to give more custom error messages.
-                catch (SecurityTokenExpiredException) { /* Handle */ }
+                { 
+                    validToken = await ValidateTokenAsync(token); 
+                } // This section can be greatly expanded to give more custom error messages.
+                catch (SecurityTokenExpiredException) {
+                    /* Handle */
+                    var udata=Authenticate("admin","admin");
+                    context.HttpContext.Response.Headers.Add("Auth-Token", udata.Token);
+                    context.HttpContext.Response.Cookies.Delete("XSRF-TOKEN");
+                    var tokens = _antiforgery.GetAndStoreTokens(context.HttpContext);
+                    context.HttpContext.Response.Cookies.Append("XSRF-TOKEN", tokens.RequestToken, new Microsoft.AspNetCore.Http.CookieOptions
+                    {
+                        HttpOnly = false
+                    });
+                    validToken = true;
+                }
                 catch (SecurityTokenValidationException) { /* Handle */ }
                 catch (SecurityTokenException) { /* Handle */ }
                 catch (Exception) { /* Handle */ }
 
                 if (validToken) // Happy Path For Valid JWT
                 {
-                    //response = await base.SendAsync(request, cancellationToken);
-                    //context.Result = new BadRequestResult();
                 }
                 else
                 {
-                    //response.StatusCode = HttpStatusCode.Unauthorized;
-                    context.Result = new BadRequestResult();
+                    context.Result = new UnauthorizedResult();
                 }
             }
             else // Optional Public access as Anonymous
             {
-                // response.StatusCode = HttpStatusCode.Unauthorized;
-                // response = await base.SendAsync(request, cancellationToken);
-                context.Result = new BadRequestResult();
+                context.Result = new UnauthorizedResult();
             }
         }
+        protected virtual bool ShouldValidate(AuthorizationFilterContext context)
+        {
+            if (context == null)
+            {
+                throw new ArgumentNullException(nameof(context));
+            }
 
+            return true;
+        }
 
         private static bool HasAllowAnonymous(IList<IFilterMetadata> filters)
         {
@@ -187,74 +199,209 @@ namespace RtmWebApi.Helper
             TokenValidationParameters validationParameters)
         {
             var valid = false;
-
+            var maxTokenGenTime = expires.Value.AddMinutes(2);
             // Additional checks can be performed on the SecurityToken or the validationParameters.
-            if ((expires.HasValue && DateTime.UtcNow < expires)
-             && (notBefore.HasValue && DateTime.UtcNow > notBefore))
-            { valid = true; }
-
+            if ((expires.HasValue && DateTime.UtcNow < expires.Value) && (notBefore.HasValue && DateTime.UtcNow > notBefore))
+            { 
+                return true; 
+            }
+            else if ((expires.HasValue && DateTime.UtcNow < maxTokenGenTime) && (notBefore.HasValue && DateTime.UtcNow > notBefore))
+            {
+                throw new SecurityTokenExpiredException();
+            }
             return valid;
         }
+
+        private User Authenticate(string username, string password)
+        {
+            List<User> _users = new List<User>
+            {
+            new User { Id = 1, FirstName = "Admin", LastName = "User", Username = "admin", Password = "admin", Role = Role.Admin },
+            new User { Id = 2, FirstName = "Normal", LastName = "User", Username = "user", Password = "user", Role = Role.User }
+            };
+            string Secret = "ERMN05OPLoDvbTTa/QkqLNMI7cPLguaRyHzyg7n5qNBVjQmtBhz4SzYh4NBVCXi3KJHlSXKP+oi2+bXr6CUYTR==";
+            var user = _users.SingleOrDefault(x => x.Username == username && x.Password == password);
+            // return null if user not found
+
+            // authentication successful so generate jwt token
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.ASCII.GetBytes(Secret);
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(new Claim[]
+                {
+                    new Claim(ClaimTypes.Name, user.Id.ToString()),
+                    new Claim(ClaimTypes.Role, user.Role)
+                }),
+                NotBefore = DateTime.UtcNow,
+                Audience = "abc.com",
+                Issuer = "abc.com",
+                Expires = DateTime.UtcNow.AddMinutes(2),
+
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+            };
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            user.Token = tokenHandler.WriteToken(token);
+
+            // remove password before returning
+            user.Password = null;
+
+            return user;
+        }
+    }
+==============================================================================
+login(username: string, password: string) {
+        let reqObj = {
+            "UserName": username,
+            "Password": password
+        };
+        return this.http.post<any>(this.baseUrl + 'rtmsapi/api/login/userlogin', reqObj)
+            .pipe(map(user => {
+                // store user details and jwt token in local storage to keep user logged in between page refreshes
+                console.log(user);
+                localStorage.setItem('currentUser', JSON.stringify(user));
+                this.currentUserSubject.next(user);
+                return user;
+            })//,switchMap(_ => this.http.post<any>(this.baseUrl + 'rtmsapi/api/login/generateantiforgerytokens', ''))
+        );
+    }
+
+    refreshToken(token: string) {
+        localStorage.removeItem('currentToken');
+        this.currentTokenSubject.next(null);
+        localStorage.setItem('currentToken', token);
+        this.currentTokenSubject.next(token);
+        console.log("refreshed", token);
+    }
+==================================================================================
+@Injectable()
+export class ErrorInterceptor implements HttpInterceptor {
+    constructor(private authenticationService: AuthenticationService) { }
+
+    intercept(request: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
+
+    return next.handle(request)
+        .pipe(
+            tap(
+                (result: HttpResponse<any>) => {
+                    console.log("response intercepted", result);
+                    if (result.headers != null && result.headers.has("Auth-Token")) {
+
+                        this.authenticationService.refreshToken(result.headers.get("Auth-Token"));
+                    }
+                    
+                },
+                (error: HttpErrorResponse) => {
+                    console.error("error response intercepted", error);
+                    if (error.headers.has('Token-Expired') && error.status == 401) {
+                        console.log("Token expired");
+                    }
+                }
+            )
+        );
     }
 }
+==================================================================
 
-======================================================
-public class ValidateAntiforgeryTokenAuthorizationFilter : IAsyncAuthorizationFilter, IAntiforgeryPolicy
-    {
-        private readonly IAntiforgery _antiforgery;
-        private readonly ILogger _logger;
-
-        public ValidateAntiforgeryTokenAuthorizationFilter(IAntiforgery antiforgery, ILoggerFactory loggerFactory)
+public void ValidateToken(string token, out string userName, out string role)
         {
-            if (antiforgery == null)
+            userName = string.Empty;
+            role = string.Empty;
+            string username = null;
+            ClaimsPrincipal principal = GetPrincipal(token);
+            if(principal != null)
             {
-                throw new ArgumentNullException(nameof(antiforgery));
-            }
-
-            _antiforgery = antiforgery;
-            _logger = loggerFactory.CreateLogger(GetType());
-        }
-
-        public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
-        {
-            if (context == null)
-            {
-                throw new ArgumentNullException(nameof(context));
-            }
-
-            if (!context.IsEffectivePolicy<IAntiforgeryPolicy>(this))
-            {
-               // _logger.NotMostEffectiveFilter(typeof(IAntiforgeryPolicy));
-                return;
-            }
-
-            if (ShouldValidate(context))
-            {
+                ClaimsIdentity identity = null;
                 try
                 {
-                    await _antiforgery.ValidateRequestAsync(context.HttpContext);
+                    identity = (ClaimsIdentity)principal.Identity;
+                    Claim usernameClaim = identity.FindFirst(ClaimTypes.Name);
+                    Claim roleClaim = identity.FindFirst(ClaimTypes.Role);
+                    username = usernameClaim.Value;
+                    role = roleClaim.Value;
                 }
-                catch (AntiforgeryValidationException exception)
+                catch (NullReferenceException)
                 {
-                    //_logger.AntiforgeryTokenInvalid(exception.Message, exception);
-                    context.Result = new BadRequestResult();
+                    return;
+                }
+            }           
+        }
+        public ClaimsPrincipal GetPrincipal(string token)
+        {
+            try
+            {
+                JwtSecurityTokenHandler tokenHandler = new JwtSecurityTokenHandler();
+                JwtSecurityToken jwtToken = (JwtSecurityToken)tokenHandler.ReadToken(token);
+                if (jwtToken == null) return null;
+                var key = Encoding.ASCII.GetBytes(Secret);
+                TokenValidationParameters parameters = new TokenValidationParameters()
+                {
+                    RequireExpirationTime = true,
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidAudience = "abc.com",
+                    ValidIssuer = "abc.com",
+                    IssuerSigningKey = new SymmetricSecurityKey(key)
+                };
+                SecurityToken securityToken;
+                ClaimsPrincipal principal = tokenHandler.ValidateToken(token, parameters, out securityToken);
+                return principal;
+            }
+            catch(Exception ex)
+            {
+                return null;
+            }
+        }
+
+        public string EncryptString(string encryptString)
+        {
+            string EncryptionKey = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            byte[] clearBytes = Encoding.Unicode.GetBytes(encryptString);
+            using (Aes encryptor = Aes.Create())
+            {
+                Rfc2898DeriveBytes pdb = new Rfc2898DeriveBytes(EncryptionKey, new byte[] {
+            0x49, 0x76, 0x61, 0x6e, 0x20, 0x4d, 0x65, 0x64, 0x76, 0x65, 0x64, 0x65, 0x76
+        });
+                encryptor.Key = pdb.GetBytes(32);
+                encryptor.IV = pdb.GetBytes(16);
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    using (CryptoStream cs = new CryptoStream(ms, encryptor.CreateEncryptor(), CryptoStreamMode.Write))
+                    {
+                        cs.Write(clearBytes, 0, clearBytes.Length);
+                        cs.Close();
+                    }
+                    encryptString = Convert.ToBase64String(ms.ToArray());
                 }
             }
+            return encryptString;
         }
 
-        protected virtual bool ShouldValidate(AuthorizationFilterContext context)
+        public string DecryptString(string cipherText)
         {
-            if (context == null)
+            string EncryptionKey = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            cipherText = cipherText.Replace(" ", "+");
+            byte[] cipherBytes = Convert.FromBase64String(cipherText);
+            using (Aes encryptor = Aes.Create())
             {
-                throw new ArgumentNullException(nameof(context));
+                Rfc2898DeriveBytes pdb = new Rfc2898DeriveBytes(EncryptionKey, new byte[] {
+            0x49, 0x76, 0x61, 0x6e, 0x20, 0x4d, 0x65, 0x64, 0x76, 0x65, 0x64, 0x65, 0x76
+        });
+                encryptor.Key = pdb.GetBytes(32);
+                encryptor.IV = pdb.GetBytes(16);
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    using (CryptoStream cs = new CryptoStream(ms, encryptor.CreateDecryptor(), CryptoStreamMode.Write))
+                    {
+                        cs.Write(cipherBytes, 0, cipherBytes.Length);
+                        cs.Close();
+                    }
+                    cipherText = Encoding.Unicode.GetString(ms.ToArray());
+                }
             }
-
-            return true;
+            return cipherText;
         }
-    }
-}
-==============================================================================
-
+===================================================================================
 
 namespace RtmsWebApi
 {
@@ -318,5 +465,9 @@ namespace RtmsWebApi
 
 =============================================================
 https://github.com/aspnet/Mvc/blob/master/src/Microsoft.AspNetCore.Mvc.Core/Authorization/AuthorizeFilter.cs
+https://github.com/aspnet/Mvc/blob/master/src/Microsoft.AspNetCore.Mvc.Core/Authorization/AuthorizeFilter.cs
 https://stackoverflow.com/questions/31464359/how-do-you-create-a-custom-authorizeattribute-in-asp-net-core
 https://docs.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.antiforgery.iantiforgeryadditionaldataprovider.validateadditionaldata?view=aspnetcore-3.0
+
+
+Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6IjEiLCJyb2xlIjoiQWRtaW4iLCJuYmYiOjE1NzMzMTk1MTcsImV4cCI6MTU3MzMxOTgxNywiaWF0IjoxNTczMzE5NTE3LCJpc3MiOiJhYmMuY29tIiwiYXVkIjoiYWJjLmNvbSJ9.Uu0LxzCI8xJZdW70xcxbuNInwjhRGrQOTag8Nwbam6I
