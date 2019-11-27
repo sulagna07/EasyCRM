@@ -1,110 +1,100 @@
 [HttpPost("[Action]")]
 [AllowAnonymous]
-[ServiceFilter(typeof(XSRFCookieFilter))]
-[ServiceFilter(typeof(SGBrandFilter))]
+//[ServiceFilter(typeof(XSRFCookieFilter))]
+//[ServiceFilter(typeof(SGBrandFilter))]
 public async Task<IActionResult> UserLogin(MyRtmLoginRequest<dynamic> rtmRequest)
 {
-	var cn = HttpContext;
-	rtmRequest.IsChacheRequired = _cacheHelper.CachePopulationRequired();
-	var data = await _apiClient.PostAsync<MyRtmResponse<dynamic>, MyRtmLoginRequest<dynamic>>("weatherforecast/GetLoginData", rtmRequest);
+	var data = await _apiClient.PostAsync<MyRtmResponse<BusinessData<dynamic>>, MyRtmLoginRequest<dynamic>>("weatherforecast/GetLoginData", rtmRequest);//MyRtmResponse<dynamic>
 	if (data.Success)
 	{
-		var authToken = _authService.CreateToken(CommonService.DeserializeString<UserClaimModel>(data.Data));
+		var clm = data.BusinessData.Data as UserClaimModel;
+		var authToken = _authService.CreateToken(clm);
 		Response.Headers.Add("Auth-Token", authToken);
 		return Ok(data);
 	}
 	return NotFound(data);
 }
-<PackageReference Include="Microsoft.AspNet.WebApi.Client" Version="5.2.7" />
-===============================================================
+
+==================================================================
+public async Task<T1> PostAsync<T1,T2>(string requestUrl, T2 content)
+{
+	addHeaders();
+	var response = await _httpClient.PostAsync(requestUrl, CreateHttpContent(content));
+	response.EnsureSuccessStatusCode();
+	var dx=await response.Content.ReadAsStringAsync();
+	var options = new JsonSerializerOptions
+	{
+		PropertyNameCaseInsensitive = true
+	};
+	return JsonSerializer.Deserialize<T1>(dx, options);
+}
+=================================================================
 [HttpPost("[action]")]
 public IActionResult GetLoginData(MyRtmLoginRequest<dynamic> rtmRequest)
-{
-	var resp = _workMonitor.SelectWorker(new MyRtmRequest<dynamic> { Data = rtmRequest.Data, Operation = rtmRequest.Operation, UserData = rtmRequest.UserData }) as MyRtmResponse<dynamic>;
-	if (rtmRequest.IsChacheRequired && resp.Success)
-	{
-		var cacheresp= _workMonitor.SelectWorker(new MyRtmRequest<dynamic> { Operation = "PopulateCacheData"}) as MyRtmResponse<dynamic>;
-		if (cacheresp.Success)
-		{
-			resp.CacheData = cacheresp.Data;
-		}
-		else
-		{
-			resp.Data = null;
-			resp.Success = false;
-			resp.ErrorMessage = cacheresp.ErrorMessage;
-		}
-	}
-	return Ok(resp);
-}
-===============================================================
-public class MyRtmRequest<T>
-    {
-        public T Data { get; set; }
-        public string Operation { get; set; }
-        public RtmUserData UserData { get; set; }
-    }
-
-    public class MyRtmResponse<T>
-    {
-        public T Data { get; set; }
-        public bool Success { get; set; }
-        public string ErrorMessage { get; set; }
-        public dynamic CacheData { get; set; }
-    }
-
-    public class MyRtmLoginRequest<T> : MyRtmRequest<T>
-    {
-        public bool IsChacheRequired { get; set; }
-    }
-
-    public class RtmUserData
-    {
-        public string UserName { get; set; }
-        public string RoleId { get; set; }
-        public string Brand { get; set; }
-        public string RequestIP { get; set; }
-    }
-===================================================================
-public MyRtmResponse<dynamic> GetLookUp(MyRtmRequest<dynamic> req)
 {
 	MyRtmResponse<dynamic> resp;
 	try
 	{
-		var sqlParams = new SqlParameter[1];
-		sqlParams[0] = new SqlParameter()
-		{
-			ParameterName = "@JsonReq",
-			SqlDbType = SqlDbType.NVarChar,
-			Direction = ParameterDirection.Input,
-			Value = JsonSerializer.Serialize(req)
-		};
-		var jsonresponse = _iSqlHelper.ExecuteScalar("test", CommandType.StoredProcedure, "CricInfoTest_iu", out string validationMsg, sqlParams);
-		resp=new MyRtmResponse<dynamic>();
-		if (string.IsNullOrEmpty(validationMsg))
-		{
-			resp.Data = jsonresponse;
-			resp.Success = true;
-		}
-		else
-		{
-			resp.ErrorMessage = validationMsg;
-			resp.Success = false;
-		}
-	}
-	catch(SqlException ex)
+		resp = _workMonitor.SelectWorker(new MyRtmRequest<dynamic> { Data = rtmRequest.Data, Operation = rtmRequest.Operation, UserData = rtmRequest.UserData }) as MyRtmResponse<dynamic>;
+	}catch (Exception ex)
 	{
+		if (ex.InnerException != null) ex = ex.InnerException;
 		resp = new MyRtmResponse<dynamic>();
 		resp.Success = false;
-		resp.ErrorMessage = ex.Message;
+		resp.ExceptionMessage = ex.Message;
 	}
-	catch(Exception ex)
+	return Ok(resp);
+}
+====================================================================
+public MyRtmResponse<dynamic> GetLookUp(MyRtmRequest<dynamic> req)
+{
+	MyRtmResponse<dynamic> resp;
+
+	var sqlParams = new SqlParameter[1];
+	sqlParams[0] = new SqlParameter()
 	{
-		resp = new MyRtmResponse<dynamic>();
-		resp.Success = false;
-		resp.ErrorMessage = ex.Message;
+		ParameterName = "@JsonReq",
+		SqlDbType = SqlDbType.NVarChar,
+		Direction = ParameterDirection.Input,
+		Value = JsonSerializer.Serialize(req)
+	};
+	var jsonresponse = _iSqlHelper.ExecuteScalar("test", CommandType.StoredProcedure, "CricInfoTest_iu", out string validationMsg, sqlParams);
+	resp = new MyRtmResponse<dynamic>();
+	BusinessData<dynamic> bData = new BusinessData<dynamic>();
+	if (string.IsNullOrEmpty(validationMsg))
+	{
+		bData.Data = JsonSerializer.Deserialize<dynamic>(jsonresponse.ToString());
+		bData.IsValid = true;
 	}
+	else
+	{
+		bData.BusinessErrorMessage = validationMsg;
+		bData.IsValid = false;
+	}
+	resp.BusinessData = bData;
+	resp.Success = true;
 	return resp;
 }
-		
-=============================================================================	
+=============================================================================
+public class MyRtmRequest<T>
+{
+	public T Data { get; set; }
+	public string Operation { get; set; }
+	public RtmUserData UserData { get; set; }
+}
+
+public class MyRtmResponse<T>
+{
+	public T BusinessData { get; set; }
+	public bool Success { get; set; }
+	public string ExceptionMessage { get; set; }
+	public dynamic CacheData { get; set; }
+}
+
+public class BusinessData<T>
+{
+	public T Data { get; set; }
+	public bool IsValid { get; set; }
+	public string BusinessErrorMessage { get; set; }
+}
+=============================================================================
