@@ -459,3 +459,41 @@ namespace SGAuthFilter.SGServices
             return NotFound(data);
         }
     }
+=========================
+    USE [CricInfo]
+GO
+/****** Object:  StoredProcedure [dbo].[CricInfoRefresh_iu]    Script Date: 29-11-2019 12:07:21 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[CricInfoRefresh_iu]
+@JsonReq			NVARCHAR(max),
+@ErrorMessage	VARCHAR(MAX)		OUTPUT
+
+	
+
+AS
+SET NOCOUNT ON
+
+DECLARE @JsonData			NVARCHAR(MAX)
+DECLARE @ExceptionMessage	VARCHAR(MAX)
+--SET @JsonData = '{"userName":"Admin","userId":1,"roleId":4,"officeId":"A01"}';
+
+--BEGIN TRY
+Insert into StoreToken SELECT AuthToken,RefreshToken,UserId,ExpiredAt
+FROM OPENJSON(@JsonReq)
+  WITH (
+    AuthToken NVARCHAR(Max) 'strict $.Data.AuthToken',
+    RefreshToken NVARCHAR(Max) '$.Data.RefreshToken',
+    UserId varchar(10) '$.Data.UserId',
+	ExpiredAt varchar(50) '$.Data.ExpiredAt'
+  ); --FOR JSON PATH ;
+--END TRY
+/*BEGIN CATCH
+	SET @ExceptionMessage='error found';
+    RAISERROR (@ExceptionMessage,16, 1)
+	SELECT  @ExceptionMessage
+	--THROW 51000, @ErrorMess, 1
+END CATCH*/
+
