@@ -1,3 +1,11 @@
+public IActionResult OktaAuthorize()
+        {
+            if (!HttpContext.User.Identity.IsAuthenticated)
+            {
+                return Challenge(OpenIdConnectDefaults.AuthenticationScheme);
+            }
+            return RedirectToAction("Privacy", "OktaAuth");
+        }
 =============================================
 services.AddAuthentication(options =>
 {
