@@ -106,3 +106,5 @@ services.AddAuthentication(options =>
 }
 ====================================================================================
 https://developer.okta.com/blog/2018/04/18/authorization-in-your-aspnet-mvc-4-application
+https://github.com/bbachi/angular-idle-timeout/blob/master/src/app/app.component.ts
+https://blog.bitsrc.io/how-to-implement-idle-timeout-in-angular-af61eefdb13b
