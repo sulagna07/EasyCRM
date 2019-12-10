@@ -111,126 +111,56 @@ https://blog.bitsrc.io/how-to-implement-idle-timeout-in-angular-af61eefdb13b
 http://www.binaryintellect.net/articles/d56c7798-703d-45cf-be74-a8b0cec94a3c.aspx
 
 ====================================================================================
-// sets an idle timeout of 5 seconds, for testing purposes.
-    idle.setIdle(10);
-    // sets a timeout period of 5 seconds. after 10 seconds of inactivity, the user will be considered timed out.
-    idle.setTimeout(10);
-    // sets the default interrupts, in this case, things like clicks, scrolls, touches to the document
-    idle.setInterrupts(DEFAULT_INTERRUPTSOURCES);
-    //idle.setInterrupts([new EventTargetInterruptSource(document.documentElement, "click")]);
+public class SGBrandFilter : IActionFilter
+    {
+        private readonly IConfiguration _config;
+        public SGBrandFilter(IConfiguration config)
+        {
+            _config = config;
+        }
 
-    idle.onIdleEnd.subscribe(() => {
-      localStorage.setItem('lastPing', Date.now().toString());
-      this.childModal.hide();
-      this.idleState = 'No longer idle.'
-      console.log(this.idleState);
-      this.reset();
-    });
+        public void OnActionExecuted(ActionExecutedContext context)
+        {
+            //throw new NotImplementedException();
+        }
 
-    idle.onTimeout.subscribe(() => {
-      this.idleState = 'Timed out!';
-      this.timedOut = true;
-      console.log(this.idleState);
-      this.logout();
-    });
+        public void OnActionExecuting(ActionExecutingContext context)
+        {
+            if (context.ModelState.IsValid)
+                {
+                try
+                {
+                    var clientIp = context.HttpContext.Connection.RemoteIpAddress.ToString();
+                    var brandUrl = context.HttpContext.Request.Host.Host;
+                    var isModelExist = context.ActionArguments.TryGetValue("rtmRequest", out object requsetmodel);
+                    if(!string.IsNullOrEmpty(clientIp) && !string.IsNullOrEmpty(brandUrl) && isModelExist)
+                    {
+                        var loginModel = requsetmodel as MyRtmRequest<dynamic>;
+                        loginModel.UserData.RequestIP = clientIp;
+                        loginModel.UserData.Brand = GetBrandName(brandUrl);
+                    }
+                    else
+                    {
+                        context.Result = new BadRequestResult();
+                    }
+                } 
+                catch (Exception ex)
+                {
+                    context.Result = new BadRequestResult();
+                }
+            }
+            else
+            {
+                context.Result = new BadRequestObjectResult(context.ModelState);
+            }
+        }
 
-    idle.onIdleStart.subscribe(() => {
-      var lastping = Number(localStorage.getItem('lastPing'));
-      if (Date.now() - lastping > 10000) {
-        localStorage.setItem('sessionTimeout', "true");
-        this.idleState = 'You\'ve gone idle!'
-        console.log(this.idleState);
-        this.childModal.show();
-      }
-    });
-
-    idle.onTimeoutWarning.subscribe((countdown) => {
-      var sessionTimeout = Boolean(localStorage.getItem('sessionTimeout'));
-      if (sessionTimeout) {
-
-        this.idleState = 'You will time out in ' + countdown + ' seconds!'
-        console.log(this.idleState);
-      }
-    });
-
-    // sets the ping interval to 15 seconds
-    //keepalive.interval(2);
-
-    //keepalive.onPing.subscribe(() => { this.lastPing = new Date(); console.log("ping"); });
-
-    this.authenticationService.currentUser.subscribe(x => {
-      if (x) {
-        localStorage.setItem('lastPing', Date.now().toString());
-        this.currentUser = x;
-        this.showNavBar = true;
-        idle.watch()
-        this.timedOut = false;
-        localStorage.setItem('sessionTimeout', "false");
-      } else {
-        idle.stop();
-      }
-    });
-    this.authenticationService.currentToken.subscribe(x => this.currentToken = x);
-===============================================================================================
-reset() {
-    this.idle.watch();
-    //xthis.idleState = 'Started.';
-    this.timedOut = false;
-    localStorage.setItem('sessionTimeout', "false");
-  }
-
-  hideChildModal(): void {
-    this.childModal.hide();
-  }
-
-  stay() {
-    this.childModal.hide();
-    this.reset();
-  }
-
-  logout() {
-    this.childModal.hide();
-    this.authenticationService.logout();
-    this.showNavBar = false;
-    this.router.navigate(['/']);
-  }
-===================================================================================================
-"@ng-idle/core": "^8.0.0-beta.4",
-    "@ng-idle/keepalive": "^8.0.0-beta.4",
-==============================================================================
-USE [CricInfo]
-GO
-/****** Object:  StoredProcedure [dbo].[CricInfoRefresh_iu]    Script Date: 10-12-2019 09:27:41 ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-ALTER PROCEDURE [dbo].[CricInfoRefresh_iu]
-@JsonReq			NVARCHAR(max),
-@ErrorMessage	VARCHAR(MAX)		OUTPUT
-
-	
-
-AS
-SET NOCOUNT ON
-
-DECLARE @JsonData			NVARCHAR(MAX)
-DECLARE @ExceptionMessage	VARCHAR(MAX)
---SET @JsonData = '{"userName":"Admin","userId":1,"roleId":4,"officeId":"A01"}';
-
---BEGIN TRY
-Insert into StoreToken SELECT AuthToken,RefreshToken,UserId,ExpiredAt
-FROM OPENJSON(@JsonReq)
-  WITH (
-    AuthToken NVARCHAR(Max) 'strict $.Data.AuthToken',
-    RefreshToken NVARCHAR(Max) '$.Data.RefreshToken',
-    UserId varchar(10) '$.Data.UserId',
-	ExpiredAt varchar(50) '$.Data.ExpiredAt'
-  ); --FOR JSON PATH ;
---END TRY
-/*BEGIN CATCH
-	SET @ExceptionMessage='error found';
-    RAISERROR (@ExceptionMessage,16, 1)
-	SELECT  @ExceptionMessage
-	--THROW 51000, @ErrorMess, 1
-END CATCH*/
+        private string GetBrandName(string brandurl)
+        {
+            var contentRoot = _config.GetValue<string>(WebHostDefaults.ContentRootKey);
+            var jsonConfig = new ConfigurationBuilder().AddJsonFile(contentRoot+_config["BrandMapPath"]).Build();
+            return jsonConfig["BrandUrl:"+ brandurl];
+        }
+    }
+}
+[ServiceFilter(typeof(SGBrandFilter))]
