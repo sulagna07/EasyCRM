@@ -164,3 +164,7 @@ public class SGBrandFilter : IActionFilter
     }
 }
 [ServiceFilter(typeof(SGBrandFilter))]
+https://www.techiediaries.com/angular-file-upload-progress-bar/
+https://www.techiediaries.com/angular-formdata/
+https://www.positronx.io/how-to-use-angular-8-httpclient-to-post-formdata/
+https://www.ahmedbouchefra.com/blog/angular-tutorial-example-upload-files-with-formdata-httpclient-rxjs-and-material-progressbar/
