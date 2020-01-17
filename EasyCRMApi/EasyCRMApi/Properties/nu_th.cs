@@ -548,3 +548,44 @@ IIS": {
         "ASPNETCORE_ENVIRONMENT": "Devweb"
       }
     }
+=========================================
+TokenValidationParameters parameters = new TokenValidationParameters()
+            {
+                //RequireExpirationTime = true,
+                ValidateLifetime = false,
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidAudience = _config["AuthConfig:Audiance"],
+                ValidIssuer = _config["AuthConfig:Issuer"],
+                IssuerSigningKey = new SymmetricSecurityKey(key)
+            };
+====================================
+	uploadFile(event) {
+    var file = <File>(event.target as HTMLInputElement).files[0];
+    // Show preview 
+    var mimeType = file.type;
+    if (mimeType.match(/image\/*/) == null) {
+      //this.form.controls.avatar = null;
+      alert("no image");
+      //return;
+    } else {
+
+      this.fileData = file;
+      var reader = new FileReader();
+      reader.readAsDataURL(this.fileData);
+      reader.onload = (_event) => {
+        this.previewUrl = reader.result;
+      }
+
+      this.form.patchValue({
+        avatar: this.fileData
+      });
+      this.form.get('avatar').updateValueAndValidity()
+    }
+  }
+  ===================================
+  <div class="image-preview mb-3" *ngIf="previewUrl">
+      <img [src]="previewUrl" height="300" />
+    </div>
+  =====================================
+  https://w3path.com/new-angular-8-file-upload-or-image-upload/
